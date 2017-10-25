@@ -59,13 +59,14 @@ elif [ "$SENSOR" == 1 ]; then
 	service docker start
 
 	echo 'AUTOSSH_OPTIONS="-L 5000:localhost:5000"' >> /root/.ssh/securityonion_ssh.conf
-		##sed -i 's/AUTOSSH_OPTIONS=.*/AUTOSSH_OPTIONS="-L 5000:localhost:5000"/' /usr/sbin/so-autossh-start
+	##sed -i 's/AUTOSSH_OPTIONS=.*/AUTOSSH_OPTIONS="-L 5000:localhost:5000"/' /usr/sbin/so-autossh-start
 
 	echo ""
         echo "We need to add autossh options to /root/.ssh/securityonion_ssh.conf and stop/re-build the autossh tunnel for our changes to take effect..."      	
 	echo ""
 	echo 'AUTOSSH_OPTIONS="-L 5000:localhost:5000"' >> /root/.ssh/securityonion_ssh.conf
 	##sed -i 's/AUTOSSH_OPTIONS=.*/AUTOSSH_OPTIONS="-L 5000:localhost:5000"/' /usr/sbin/so-autossh-start
+	
 	pkill autossh
 	/usr/sbin/so-autossh-start
 		
@@ -79,5 +80,3 @@ elif [ "$SENSOR" == 1 ]; then
 	# Start containers
 	so-elastic-start
 fi
-
-
