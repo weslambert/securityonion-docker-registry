@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 echo
 echo -e "This script will configure a Docker registry for a Security Onion master server,\nand/or a Security Onion sensor to pull images from a master server."
 echo
@@ -18,65 +18,66 @@ else
 fi
 
 if [ "$SERVER" == 1 ]; then
-        
-	so-elastic-stop
-	service docker stop
-        
-	echo 'DOCKER_OPTS="--registry-mirror=http://localhost:5000"' >> /etc/default/docker
-	service docker start
-		
-	# Generate config file
+
+        so-elastic-stop
+        service docker stop
+
+        sed -i 's|"bip": "172.17.0.1/24"|"bip": "172.17.0.1/24","registry-mirrors": ["http://localhost:5000"]|' /etc/docker/daemon.json
+
+        service docker start
+
+        # Generate config file
         docker run -it --rm --entrypoint cat registry:2 /etc/docker/registry/config.yml > `pwd`/config.yml
 
         # Pass proxy info to config file
-cat << EOF >> config.yml
-proxy:
-  remoteurl: https://registry-1.docker.io
-EOF
+	echo "proxy:" >> config.yml
+	echo "  remoteurl: https://registry-1.docker.io" >> config.yml
+
         # Start registry
-        docker run -d --restart=always -p 127.0.0.01:5000:5000 --name docker-registry -v `pwd`/config.yml:/etc/docker/registry/config.yml registry:2
+        docker run -d --restart=always -p 127.0.0.01:5000:5000 --name so-registry -v `pwd`/config.yml:/etc/docker/registry/config.yml registry:2
 
-	# Remove old images and get new ones
-	. /usr/sbin/so-elastic-common
-	for i in so-curator so-domainstats so-elastalert so-elasticsearch so-freqserver so-kibana so-logstash; do
-		docker rm $i
-            	docker rmi $DOCKERHUB/$i
-	done
+        # Remove old images and get new ones
+        . /usr/sbin/so-elastic-common
+        for i in so-curator so-domainstats so-elastalert so-elasticsearch so-freqserver so-kibana so-logstash; do
+                docker rm $i
+                docker rmi $DOCKERHUB/$i
+        done
 
-	# Start containers
-	so-elastic-start
-		
+        # Start containers
+        so-elastic-start
+
 elif [ "$SENSOR" == 1 ]; then
 
         # Stop containers and Docker
         so-elastic-stop
-	service docker stop
-	
-	# Configure registry mirror so we can pull from registry
-	echo 'DOCKER_OPTS="--registry-mirror=http://localhost:5000"' >> /etc/default/docker
-	
-	# Start Docker back up
-	service docker start
+        service docker stop
 
-	echo 'AUTOSSH_OPTIONS="-L 5000:localhost:5000"' >> /root/.ssh/securityonion_ssh.conf
-	##sed -i 's/AUTOSSH_OPTIONS=.*/AUTOSSH_OPTIONS="-L 5000:localhost:5000"/' /usr/sbin/so-autossh-start
+        # Configure registry mirror so we can pull from registry
+        sed -i 's|"bip": "172.17.0.1/24"|"bip": "172.17.0.1/24","registry-mirrors": ["http://localhost:5000"]|' /etc/docker/daemon.json
 
-	echo ""
-        echo "We need to add autossh options to /root/.ssh/securityonion_ssh.conf and stop/re-build the autossh tunnel for our changes to take effect..."      	
-	echo ""
-	echo 'AUTOSSH_OPTIONS="-L 5000:localhost:5000"' >> /root/.ssh/securityonion_ssh.conf
-	##sed -i 's/AUTOSSH_OPTIONS=.*/AUTOSSH_OPTIONS="-L 5000:localhost:5000"/' /usr/sbin/so-autossh-start
-	
-	pkill autossh
-	/usr/sbin/so-autossh-start
-		
-	## Remove old containers/images and get new ones from our local registry	
-	. /usr/sbin/so-elastic-common
-	for i in so-curator so-domainstats so-elastalert so-elasticsearch so-freqserver so-logstash; do
-	    docker rm $i
+        # Start Docker back up
+        service docker start
+
+        echo ""
+        echo "We need to add autossh options to /root/.ssh/securityonion_ssh.conf and stop/re-build the autossh tunnel for our changes to take effect..."
+        echo ""
+        echo 'AUTOSSH_OPTIONS="-L 5000:localhost:5000"' >> /root/.ssh/securityonion_ssh.conf
+
+        pkill autossh && /usr/sbin/so-autossh-start
+
+        ps aux | grep autossh
+    
+        sleep 2s
+
+        echo
+
+        ## Remove old containers/images and get new ones from our local registry
+        . /usr/sbin/so-elastic-common
+        for i in so-curator so-domainstats so-elastalert so-elasticsearch so-freqserver so-logstash so-kibana; do
+            docker rm $i
             docker rmi $DOCKERHUB/$i
-	done
-		
-	# Start containers
-	so-elastic-start
+        done
+
+        # Start containers
+        so-elastic-start
 fi
