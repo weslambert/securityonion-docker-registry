@@ -29,25 +29,27 @@ echo "The results can be rather long.  Would you like to write the results to a 
 read resultstolog
 
 if [ ${resultstolog,,} = "y" ] ; then
-	echo "Please enter the file path and file name."
-	read -e filesavelocation
-	echo "This may take a while."
-        for image in $(ls $imagepath/* | grep -E "$DOCKERHUB_|registry"); do docker load -i $image 2>&1 >> $filesavelocation
-        done
-
-        # Clean dangling images
-        if [[ $(docker images -f "dangling=true" -q) ]]; then
-            docker rmi $(docker images -f "dangling=true" -q --no-trunc) >> $filesavelocation
-        fi
+    echo "Please enter the file path and file name."
+    read -e filesavelocation
+    echo "This may take a while."
+    for image in $(ls $imagepath/* | grep -E "$DOCKERHUB_|registry"); do
+        docker load -i $image 2>&1 >> $filesavelocation
+    done
+    
+    # Clean dangling images
+    if [[ $(docker images -f "dangling=true" -q) ]]; then
+        docker rmi $(docker images -f "dangling=true" -q --no-trunc) >> $filesavelocation
+    fi
 else
-	echo "This may take a while."
-        for image in $(ls $imagepath/* | grep -E "$DOCKERHUB_|registry"); do docker load -i $image 
-        done
+    echo "This may take a while."
+    for image in $(ls $imagepath/* | grep -E "$DOCKERHUB_|registry"); do
+        docker load -i $image 
+    done
 
-        # Clean dangling images
-        if [[ $(docker images -f "dangling=true" -q) ]]; then
-            docker rmi $(docker images -f "dangling=true" -q --no-trunc)
-        fi
+    # Clean dangling images
+    if [[ $(docker images -f "dangling=true" -q) ]]; then
+        docker rmi $(docker images -f "dangling=true" -q --no-trunc)
+    fi
 fi
 
 echo "Complete!"
