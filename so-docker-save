@@ -27,9 +27,9 @@ read -e imagepath
 # No output from docker save so no sense in asking to save log
 echo "This may take a while."
 for image in $(docker images | grep -E "$DOCKERHUB|registry" | awk '{ print $1 }'); do
-imagename=$(echo $image | sed 's/\:/_/g;s/\//_/g')
-echo "Saving $image to $imagepath/$imagename"
-docker save $image -o $imagepath/$imagename
+    imagename=$(echo $image | sed 's/\:/_/g;s/\//_/g')
+    echo "Saving $image to $imagepath/$imagename"
+    docker save $image -o $imagepath/$imagename
 done
 
 echo "Complete!"
