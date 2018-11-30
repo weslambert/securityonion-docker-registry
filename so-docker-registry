@@ -1,4 +1,9 @@
 #!/bin/bash
+
+. /usr/sbin/so-common
+
+CONFIG_DIR=/etc/docker
+
 echo
 echo -e "This script will configure a Docker registry for a Security Onion master server,\nand/or a Security Onion sensor to pull images from a master server."
 echo
@@ -19,65 +24,101 @@ fi
 
 if [ "$SERVER" == 1 ]; then
 
-        so-elastic-stop
-        service docker stop
+    echo "Does the master server have internet access? [Y/N]"
+    
+    read OFFLINE
+    
+    if [ "$OFFLINE" != "N" ] ; then OFFLINE=0; fi
 
+    so-elastic-stop
+    service docker stop
+    
+    if ! grep -q 'localhost:5000' /etc/docker/daemon.json; then
         sed -i 's|"bip": "172.17.0.1/24"|"bip": "172.17.0.1/24","registry-mirrors": ["http://localhost:5000"]|' /etc/docker/daemon.json
+    fi
 
-        service docker start
+    service docker start
 
+    if [ "$OFFLINE" == 0 ]; then
         # Generate config file
-        docker run -it --rm --entrypoint cat registry:2 /etc/docker/registry/config.yml > `pwd`/config.yml
-
+        docker run -it --rm --entrypoint cat registry:2 /etc/docker/registry/config.yml > $CONFIG_DIR/config.yml
+   
         # Pass proxy info to config file
-	echo "proxy:" >> config.yml
-	echo "  remoteurl: https://registry-1.docker.io" >> config.yml
+        echo "proxy:" >> $CONFIG_DIR/config.yml
+        echo "  remoteurl: https://registry-1.docker.io" >> $CONFIG_DIR/config.yml
 
         # Start registry
-        docker run -d --restart=always -p 127.0.0.01:5000:5000 --name so-registry -v `pwd`/config.yml:/etc/docker/registry/config.yml registry:2
+        docker run -d --restart=always -p 127.0.0.01:5000:5000 --name so-registry -v $CONFIG_DIR/config.yml:/etc/docker/registry/config.yml registry:2
 
-        # Remove old images and get new ones
+        # Remove old images and get new ones to generate cache
         . /usr/sbin/so-elastic-common
-        for i in so-curator so-domainstats so-elastalert so-elasticsearch so-freqserver so-kibana so-logstash; do
-                docker rm $i
-                docker rmi $DOCKERHUB/$i
+        for image in $(docker images | grep $DOCKERHUB | awk '{ print $1 }'); do
+            docker rm $(echo $image | cut -d '/' -f 2)
+           docker rmi $image
         done
 
-        # Start containers
-        so-elastic-start
+    elif docker images | grep -q 'registry'; then
+        # Start registry
+        docker run -d --restart=always -p 127.0.0.01:5000:5000 --name so-registry registry:2
+
+        # Push containers
+        . /usr/sbin/so-elastic-common
+        echo "Pushing containers to local registry"
+        for container in $(docker images | grep $DOCKERHUB | grep -v localhost | awk '{ print $1 }'); do
+            docker tag $container localhost:5000/$container >/dev/null
+            docker push localhost:5000/$container
+            docker rmi localhost:5000/$container >/dev/null
+        done
+    else
+        echo "It appears the required docker images have not been loaded on this master server."
+        echo "Please consult the directions and try again. Exiting."
+        exit 1
+    fi
+
+    # Start containers
+    so-elastic-start
 
 elif [ "$SENSOR" == 1 ]; then
 
-        # Stop containers and Docker
-        so-elastic-stop
-        service docker stop
+    # Stop containers and Docker
+    so-elastic-stop
+    service docker stop
 
-        # Configure registry mirror so we can pull from registry
+    # Configure registry mirror so we can pull from registry
+    if ! grep -q 'localhost:5000' /etc/docker/daemon.json; then
         sed -i 's|"bip": "172.17.0.1/24"|"bip": "172.17.0.1/24","registry-mirrors": ["http://localhost:5000"]|' /etc/docker/daemon.json
+    fi
 
-        # Start Docker back up
-        service docker start
+    # Start Docker back up
+    service docker start
 
-        echo ""
-        echo "We need to add autossh options to /root/.ssh/securityonion_ssh.conf and stop/re-build the autossh tunnel for our changes to take effect..."
-        echo ""
+    echo ""
+    echo "We need to add autossh options to /root/.ssh/securityonion_ssh.conf and stop/re-build the autossh tunnel for our changes to take effect..."
+    echo ""
+    if ! grep -q '5000:localhost:5000' /root/.ssh/securityonion_ssh.conf; then
         echo 'AUTOSSH_OPTIONS="-L 5000:localhost:5000"' >> /root/.ssh/securityonion_ssh.conf
+    fi
 
-        pkill autossh && /usr/sbin/so-autossh-start
+    pkill autossh && /usr/sbin/so-autossh-start
 
-        ps aux | grep autossh
-    
-        sleep 2s
+    ps aux | grep autossh
 
-        echo
+    sleep 2s
 
-        ## Remove old containers/images and get new ones from our local registry
-        . /usr/sbin/so-elastic-common
-        for i in so-curator so-domainstats so-elastalert so-elasticsearch so-freqserver so-logstash so-kibana; do
-            docker rm $i
-            docker rmi $DOCKERHUB/$i
-        done
+    echo
 
-        # Start containers
-        so-elastic-start
+    # Remove old containers/images and get new ones from our local registry
+    . /usr/sbin/so-elastic-common
+    for image in $(docker images | grep $DOCKERHUB | awk '{ print $1 }'); do
+       docker rm $(echo $image | cut -d'/' -f2)
+       docker rmi $image
+    done
+
+    # Clean dangling images
+    if [[ $(docker images -f "dangling=true" -q) ]]; then
+        docker rmi $(docker images -f "dangling=true" -q --no-trunc)
+    fi
+
+    # Start containers
+    so-elastic-start
 fi
