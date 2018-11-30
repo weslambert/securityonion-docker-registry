@@ -12,9 +12,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 #
 # Purpose:  This script will allow you to load your local Docker containers and
-#           remove <none> tagged leftovers.
+#           remove <none> tagged leftovers if that block is uncommented
 
 . /usr/sbin/so-elastic-common
 
@@ -35,21 +36,27 @@ if [ ${resultstolog,,} = "y" ] ; then
     for image in $(ls $imagepath/* | grep -E "$DOCKERHUB_|registry"); do
         docker load -i $image 2>&1 >> $filesavelocation
     done
-    
-    # Clean dangling images
-    if [[ $(docker images -f "dangling=true" -q) ]]; then
-        docker rmi $(docker images -f "dangling=true" -q --no-trunc) >> $filesavelocation
-    fi
+
+    # Uncomment to start with newly loaded containers
+    #so-elastic-stop
+    ## Clean dangling images
+    #if [[ $(docker images -f "dangling=true" -q) ]]; then
+    #    docker rmi $(docker images -f "dangling=true" -q --no-trunc)
+    #fi
+    #so-elastic-start
 else
     echo "This may take a while."
     for image in $(ls $imagepath/* | grep -E "$DOCKERHUB_|registry"); do
-        docker load -i $image 
+        docker load -i $image
     done
 
-    # Clean dangling images
-    if [[ $(docker images -f "dangling=true" -q) ]]; then
-        docker rmi $(docker images -f "dangling=true" -q --no-trunc)
-    fi
+    # Uncomment to start with newly loaded containers
+    #so-elastic-stop
+    ## Clean dangling images
+    #if [[ $(docker images -f "dangling=true" -q) ]]; then
+    #    docker rmi $(docker images -f "dangling=true" -q --no-trunc)
+    #fi
+    #so-elastic-start
 fi
 
 echo "Complete!"
