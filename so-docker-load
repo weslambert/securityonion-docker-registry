@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Purpose:  This script will allow you to load your local Docker containers and
+#           remove <none> tagged leftovers.
+
+. /usr/sbin/so-elastic-common
+
+echo
+echo
+echo "This script will allow you to load your saved Security Onion docker containers locally."
+echo
+echo "Please enter the file path where the images are saved."
+read -e imagepath
+
+echo "The results can be rather long.  Would you like to write the results to a file? (Y/N)"
+read resultstolog
+
+if [ ${resultstolog,,} = "y" ] ; then
+	echo "Please enter the file path and file name."
+	read -e filesavelocation
+	echo "This may take a while."
+        for image in $(ls $imagepath/* | grep -E "$DOCKERHUB_|registry"); do docker load -i $image 2>&1 >> $filesavelocation
+        done
+
+        # Clean dangling images
+        if [[ $(docker images -f "dangling=true" -q) ]]; then
+            docker rmi $(docker images -f "dangling=true" -q --no-trunc) >> $filesavelocation
+        fi
+else
+	echo "This may take a while."
+        for image in $(ls $imagepath/* | grep -E "$DOCKERHUB_|registry"); do docker load -i $image 
+        done
+
+        # Clean dangling images
+        if [[ $(docker images -f "dangling=true" -q) ]]; then
+            docker rmi $(docker images -f "dangling=true" -q --no-trunc)
+        fi
+fi
+
+echo "Complete!"
